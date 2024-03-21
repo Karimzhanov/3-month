@@ -8,7 +8,7 @@ import requests
 import sqlite3
 import logging
 
-Token = "7113496550:AAHkrrV-VoSoMmXwiMpFLIY_0c7dwN4moPs"
+# Token = "7113496550:AAHkrrV-VoSoMmXwiMpFLIY_0c7dwN4moPs"
 
 bot = Bot(Token)
 dp = Dispatcher(bot, storage=MemoryStorage())  
@@ -42,6 +42,7 @@ class OrderState(StatesGroup):
     get_name = State()
     get_address = State()
     get_phone = State()
+    get_laptop = State() 
     confirm_order = State()
     
     
@@ -75,43 +76,50 @@ async def get_phone(message: types.Message, state: FSMContext):
         data['phone'] = message.text
     
     cursor.execute("SELECT * FROM goods")
-    try:
-        items = cursor.fetchall()
-        total_price = sum(item[2] for item in items)
-    except Exception as e:
-        logging.error(f"Ошибка при получении товаров из базы данных: {e}")
-        total_price = 0
+    items = cursor.fetchall()
+    if not items:
+        await message.answer("Ваша корзина пуста. Добавьте товары в корзину с помощью команды /buy.")
+        await state.finish()  
+        return
+    
+    total_price = sum(item[2] for item in items)
+    cursor.execute("SELECT * FROM goods ORDER BY id DESC LIMIT 1")
+    last_item = cursor.fetchone()
+    if last_item:
+        laptop_name = last_item[1]
+    else:
+        laptop_name = "Товар не указан"
     
     await state.update_data(total_price=total_price)
     
     order_info = f"Имя: {data['name']}\n" \
                  f"Адрес: {data['address']}\n" \
                  f"Телефон: {data['phone']}\n" \
+                 f"Товар: {laptop_name}\n" \
                  f"Итоговая стоимость: {total_price} cом."
  
     await message.answer("Пожалуйста, подтвердите ваш заказ:\n" + order_info)
-    await OrderState.confirm_order.set()
-
-@dp.message_handler(state=OrderState.confirm_order)
-async def confirm_order(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['да', 'yes']:
-        async with state.proxy() as data:
-            cursor.execute('''
-                INSERT INTO orders (name, address, phone, total_price)
-                VALUES (?, ?, ?, ?)''', (data['name'], data['address'], data['phone'], data['total_price']))
-            connect.commit()
-
-        await message.answer("Заказ успешно оформлен!")
-    else:
-        await message.answer("Заказ отменен.")
+    await OrderState.get_laptop.set()  
     
-    await state.finish()
-    await OrderState.get_name.set()
-
-
+@dp.message_handler(state=OrderState.get_laptop)
+async def get_laptop(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['laptop'] = message.text
     
+    async with state.proxy() as data:
+        laptop = data['laptop']
+        name = data['name']
+        address = data['address']
+        phone = data['phone']
+        total_price = data['total_price']
+          
+    cursor.execute('''
+        INSERT INTO orders (name, address, phone, laptop, total_price)
+        VALUES (?, ?, ?, ?, ?)''', (name, address, phone, laptop, total_price))
+    connect.commit()
+
     await state.finish()
-    await OrderState.get_name.set()  # Возв в начальное состояние
+    await message.answer("Заказ успешно оформлен!\n")
 
 class ResumeState(StatesGroup):
     title = State()
@@ -262,3 +270,4 @@ async def on_startup(dp):
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+

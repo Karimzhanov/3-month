@@ -8,7 +8,7 @@ import requests
 import sqlite3
 import logging
 
-# Token = "7113496550:AAHkrrV-VoSoMmXwiMpFLIY_0c7dwN4moPs"
+Token = "7113496550:AAHkrrV-VoSoMmXwiMpFLIY_0c7dwN4moPs"
 
 bot = Bot(Token)
 dp = Dispatcher(bot, storage=MemoryStorage())  
@@ -140,9 +140,10 @@ async def help_handler(message: types.Message):
                         "/order - заказать ноутбук \n"
                         "/bucket - посмотреть корзину \n "
                         "/remove - для удаления товара с корзины  ")
+    
 
 @dp.message_handler(commands='laptops')
-async def send_laptops(message:types.Message):
+async def send_laptops(message: types.Message):
     await message.answer("Отправляю ноутбуки в наличии....")
     url = f'https://www.barmak.store/category/Laptop/'
     response = requests.get(url=url)
@@ -150,9 +151,13 @@ async def send_laptops(message:types.Message):
     all_laptops = soup.find_all('div', class_='tp-product-tag-2')
     all_prices = soup.find_all('span', class_='tp-product-price-2 new-price')
 
+    laptops_info = ""
     for name, price in zip(all_laptops, all_prices):
-        await message.answer(f"{name.text} - {price.text}")
+        laptops_info += f"{name.text} - {price.text}\n"
+
+    await message.answer(laptops_info.strip())
     await message.answer("Вот все ноутбуки в наличии")
+
 
 @dp.message_handler(commands='bucket')
 async def bucket(message: types.Message):
@@ -270,4 +275,3 @@ async def on_startup(dp):
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
-
